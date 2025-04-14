@@ -1,0 +1,145 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+    dependencies {
+        classpath 'com.github.seokjun7410.Easy-rest-redocly:easy-rest-redocly-plugin:v0.1.3'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.2'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'checkstyle'
+    id 'com.epages.restdocs-api-spec' version '0.19.0'
+}
+
+group = 'com.ringle'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'com.github.seokjun7410.easy-restdocs:easy-rest-redocly:v0.0.5'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.redisson:redisson-spring-boot-starter:3.17.4'
+
+    // Swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+    //restdocs
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.18.2'
+    testImplementation 'com.epages:restdocs-api-spec-restassured:0.18.2'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-restassured'
+    implementation 'com.github.seokjun7410.Easy-rest-redocly:easy-rest-redocly:v0.1.3'
+
+
+    // QueryDSL
+    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
+    annotationProcessor "com.querydsl:querydsl-apt:${dependencyManagement.importedProperties['querydsl.version']}:jakarta"
+    annotationProcessor "jakarta.annotation:jakarta.annotation-api"
+    annotationProcessor "jakarta.persistence:jakarta.persistence-api"
+
+
+    //objectmapper
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    //test db
+    testImplementation 'com.h2database:h2'
+
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    outputs.upToDateWhen { false }
+    def profile = project.hasProperty('profile') ? project.getProperty('profile') : 'dev'
+    systemProperty 'spring.profiles.active', profile
+}
+
+checkstyle {
+    maxWarnings = 0
+    configFile = file("/${rootDir}/checkstyle/naver-checkstyle-rules.xml")
+    configProperties = ["suppressionFile": "${rootDir}/checkstyle/naver-checkstyle-suppressions.xml"]
+    toolVersion = "10.22.0"
+}
+checkstyleMain.source = fileTree('src/main/java') //검사 대상
+
+openapi3 {
+    outputFileNamePrefix = "openapi"
+    server = 'https://localhost:8080'
+    title = 'My API'
+    description = 'My API description'
+    version = '0.1.0'
+    format = 'yaml'
+}
+
+// Querydsl 설정부
+def generated = 'src/main/generated'
+
+// querydsl QClass 파일 생성 위치를 지정
+tasks.withType(JavaCompile) {
+    options.getGeneratedSourceOutputDirectory().set(file(generated))
+}
+
+// java source set 에 querydsl QClass 위치 추가
+sourceSets {
+    main.java.srcDirs += [generated]
+}
+
+// gradle clean 시에 QClass 디렉토리 삭제
+clean {
+    delete file(generated)
+}
+
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "com.github.seokjun7410.easy-restdocs" &&
+                requested.name == "easy-rest-redocly" &&
+                requested.version == "v0.0.5") {
+            useTarget("com.github.seokjun7410.Easy-rest-redocly:easy-rest-redocly:v0.1.3")
+        }
+    }
+}
+
+apply plugin: 'io.github.seokjun7410.easy-rest-redocly'
+
+task preRedocClean(type: Delete) {
+    delete rootProject.file("redoc-static.html"),
+            rootProject.file("openapi-fixed"),
+            rootProject.file("build/generated-snippets"),
+            rootProject.file("build/api-spec")
+}
+
+tasks.named("redocGenerationIntegration") {
+    dependsOn preRedocClean
+    dependsOn test
+}
+
